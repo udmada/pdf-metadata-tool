@@ -214,7 +214,11 @@ def fix_metadata(path: Path, recursive: bool, dry_run: bool, backup: bool, no_do
                         editor = PDFMetadataEditor(pdf_file)
                         if backup:
                             editor.create_backup()
-                        editor.enhance_metadata(comprehensive_metadata)
+                        # comprehensive_metadata is already the merged desired state
+                        # (existing values kept, corrupted/missing ones replaced), so
+                        # write it directly instead of re-preserving existing fields,
+                        # which would otherwise discard corrections to fields like Keywords.
+                        editor.enhance_metadata(comprehensive_metadata, preserve_existing=False)
                         console.print(f"[green]Updated metadata:[/green] {pdf_file.name}")
                         fixed_count += 1
                 else:
@@ -292,7 +296,11 @@ def process_all(path: Path, recursive: bool, dry_run: bool, backup: bool, no_doi
                         editor = PDFMetadataEditor(pdf_file)
                         if backup:
                             editor.create_backup()
-                        editor.enhance_metadata(comprehensive_metadata)
+                        # comprehensive_metadata is already the merged desired state
+                        # (existing values kept, corrupted/missing ones replaced), so
+                        # write it directly instead of re-preserving existing fields,
+                        # which would otherwise discard corrections to fields like Keywords.
+                        editor.enhance_metadata(comprehensive_metadata, preserve_existing=False)
                         console.print("[green]✓ Metadata updated[/green]")
                         fixed_count += 1
                 

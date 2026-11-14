@@ -316,7 +316,11 @@ class PDFMetadataExtractor:
             keywords = []
             for page_num in range(min(3, len(self.plumber.pages))):
                 page = self.plumber.pages[page_num]
-                text = page.extract_text()
+                # Use a tight x_tolerance so tightly-kerned journal layouts (e.g.
+                # Taylor & Francis) don't merge adjacent words into a single token.
+                # The default (3) glues keywords like "olderadults"/"STIprevention";
+                # 1 recovers the real word boundaries.
+                text = page.extract_text(x_tolerance=1)
                 
                 if not text:
                     continue
@@ -345,6 +349,10 @@ class PDFMetadataExtractor:
                         full_keyword_text = keyword_text
                         j = i + 1
                         while j < len(lines) and j < i + 4:  # Check up to 3 lines ahead
+                            # A trailing period terminates the keyword list; anything
+                            # after it is body text, not more keywords.
+                            if full_keyword_text.rstrip().endswith('.'):
+                                break
                             next_line = lines[j].strip()
                             if not next_line:
                                 j += 1
@@ -504,12 +512,18 @@ class PDFMetadataExtractor:
             if doi:
                 metadata['Subject'] = f"DOI: {doi}"
         
-        # Extract and add keywords (with deduplication and Preview.app compatibility)
+        # Extract and add keywords (with deduplication and Preview.app compatibility).
+        # Existing PDF /Keywords metadata is usually good, but earlier buggy runs left
+        # some files with corrupted keywords (glued words, DOI prefixes, captured body
+        # text). Only re-extract from the paper's explicit "Keywords" section when the
+        # existing value looks corrupted; otherwise keep/clean the existing metadata.
         existing_keywords = metadata.get('Keywords', '')
+        content_keywords = self.extract_keywords_from_content()
         if not existing_keywords:
-            keywords = self.extract_keywords_from_content()
-            if keywords:
-                metadata['Keywords'] = ', '.join(keywords)  # Always comma-separated
+            if content_keywords:
+                metadata['Keywords'] = ', '.join(content_keywords)  # Always comma-separated
+        elif content_keywords and self._keywords_look_corrupted(existing_keywords, content_keywords):
+            metadata['Keywords'] = ', '.join(content_keywords)
         else:
             # Clean up existing keywords by removing duplicates and ensuring comma separation
             metadata['Keywords'] = self._deduplicate_keywords(existing_keywords)  # Returns comma-separated
@@ -570,6 +584,37 @@ class PDFMetadataExtractor:
         
         return ', '.join(deduplicated)
     
+    def _keywords_look_corrupted(self, existing: str, content_keywords: List[str]) -> bool:
+        """Detect whether existing /Keywords metadata is corrupted output from an
+        earlier buggy run, so we can replace it with freshly extracted keywords.
+
+        Corruption signatures (all keyed off the existing string, not content quality):
+        - a DOI accidentally captured into keywords (e.g. "10.1111/dar.12536 and ...")
+        - body text bled in: citation brackets like "[1, 4]" or a sentence break
+          ("exchange. and mixing characteristics ...")
+        - glued tokens: a space-free keyword whose de-spaced form matches a multi-word
+          keyword found in the paper's explicit keyword section (e.g. "youngpeople"
+          vs "young people").
+        """
+        if re.search(r'10\.\d{4,}/', existing):  # DOI captured into keywords
+            return True
+        if re.search(r'\[\d', existing):  # citation bracket -> body text bled in
+            return True
+        if re.search(r'\.\s+[a-z]', existing):  # mid-string sentence break -> body text
+            return True
+
+        # Glued-token check: map de-spaced multi-word content keywords back to spaced form.
+        spaced = {
+            re.sub(r'\s+', '', kw).lower()
+            for kw in content_keywords
+            if ' ' in kw
+        }
+        for token in re.split(r'[,;|]', existing):
+            token = token.strip()
+            if token and ' ' not in token and token.lower() in spaced:
+                return True
+        return False
+
     def _clean_concatenated_keyword(self, keyword: str) -> str:
         """Clean up concatenated compound keywords by adding proper spacing."""
         if not keyword or len(keyword) < 10:  # Skip short keywords
