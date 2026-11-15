@@ -26,6 +26,18 @@ Options:
 
 Running `process-all` twice changes nothing the second time.
 
+### Fixing a paper by hand
+
+Books, theses, reports and preprints often have no DOI that CrossRef knows, so the tool can only keep what is stored or guess. Set those yourself:
+
+```sh
+swift run -c release pdfmeta set "An In-Depth Analysis.pdf" \
+  --title "Hatescape: An In-Depth Analysis of Extremism and Hate Speech on TikTok" \
+  --author "Ciarán O’Connor" --subject "Institute for Strategic Dialogue"
+```
+
+Only the fields you pass change; pass an empty value (`--author ""`) to clear one. A new title also renames the file. `--keywords`, `--dry-run` and `--no-backup` work as elsewhere. Later `process-all` runs leave hand-set values alone.
+
 ### What applying does
 
 For each PDF whose title, author, subject or keywords would change:

@@ -130,11 +130,11 @@ public enum ChangePlan {
 
     private static func newFilename(current: String, title: String?, source: MetadataSource, exists: (String) -> Bool) -> String? {
         guard let desired = FilenameBuilder.filename(forTitle: title) else { return nil }
-        // Only a registry-confirmed title may replace a name a person chose. A guessed title is not
+        // Only a registry-confirmed or hand-entered title may replace a name a person chose. A guessed title is not
         // sure enough, and once written it reads back as a stored one, so stored titles are held
         // to the same rule.
         let currentStem = (current as NSString).deletingPathExtension
-        if source != .crossref, currentStem.contains(" "), !Boilerplate.isJunkTitle(currentStem) { return nil }
+        if source != .crossref, source != .manual, currentStem.contains(" "), !Boilerplate.isJunkTitle(currentStem) { return nil }
         // Stored titles are sometimes cut off; the fuller name on disk is then the better one.
         let (currentKey, desiredKey) = (currentStem.squashed, String(desired.dropLast(".pdf".count)).squashed)
         if currentKey.count > desiredKey.count, currentKey.hasPrefix(desiredKey) { return nil }
