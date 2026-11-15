@@ -77,6 +77,11 @@ import Testing
         #expect(plan(currentFilename: "492429_1_En_Print.pdf", source: .content).newFilename == "Navigating Uncertainty in Search of the Good Life.pdf")
     }
 
+    @Test func storedTitleDoesNotRenameAFileSomeoneAlreadyNamed() {
+        // Once written, a guessed title reads back as a stored one; it must not gain the power to rename.
+        #expect(plan(currentFilename: "Chemical Youth.pdf", source: .existing).newFilename == nil)
+    }
+
     @Test func confirmedTitleRenamesAFileSomeoneAlreadyNamed() {
         #expect(plan(currentFilename: "Chemical Youth.pdf", source: .crossref).newFilename == "Navigating Uncertainty in Search of the Good Life.pdf")
     }
