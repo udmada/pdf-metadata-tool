@@ -19,6 +19,7 @@ It has been rewritten from Python to Swift:
 - `swift run -c release pdfmeta extract <path> [--json]` - Show resolved metadata
 - `swift run -c release pdfmeta process-all <path> --dry-run` - Preview metadata changes and renames
 - `swift run -c release pdfmeta process-all <path> [--no-backup]` - Apply them
+- `swift run -c release pdfmeta set <file> [--title] [--author] [--subject] [--keywords]` - Set fields by hand for a paper CrossRef does not know; a new title renames the file
 - Shared flags: `-r/--recursive`, `--no-doi-lookup`
 
 Never run `process-all` without `--dry-run` on the user's real library unless they ask for that run; try changes on copies.
