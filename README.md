@@ -33,11 +33,12 @@ For each PDF whose title, author, subject or keywords would change:
 1. The original is copied to `backups/<name>.backup.pdf` beside it (unless `--no-backup`).
 2. PDFKit rewrites the file to a staging location with the new fields.
 3. The staged copy is reopened and checked: same page count, fields read back as written.
-4. Only then does it replace the original.
+4. If the PDF carries an XMP metadata block, its title, creator, description, subject and keywords are set to match, and the copy is checked again. PDFKit leaves XMP untouched, so this is done by appending a standard PDF incremental update; no exiftool is involved.
+5. Only then does it replace the original.
 
 The file is then renamed if its name should change; a rename never overwrites another file. A rename on its own does not rewrite or back up the file. Encrypted PDFs are left alone.
 
-Bookmarks, annotations, links and page text survive the rewrite. This was checked on 142 real papers, where file size stayed within a few percent for all but one.
+Bookmarks, annotations, links and page text survive the rewrite. This was checked on 142 real papers, where file size stayed within a few percent for all but one. On the same set, exiftool read back matching info and XMP values from every rewritten file, and poppler reported no new errors.
 
 ### How metadata is chosen
 
@@ -69,7 +70,7 @@ Answers are cached in `~/Library/Caches/pdfmeta/crossref`, so a preview and the 
 - CrossRef's own mistakes pass through, such as authors registered surname-first.
 - A keyword list that wraps mid-phrase can lose its last words.
 - PDFs whose text layer has no word spacing yield run-together keywords.
-- Only the PDF's info dictionary is updated. An embedded XMP metadata block keeps its old values, which matters only to software that prefers XMP; Books and Preview read the info dictionary.
+- An embedded XMP block that is compressed with anything other than Deflate, or sits in a PDF structure the tool does not recognise, is left with its old values; the run reports how many.
 - A title guessed from the page can be wrong, typically on books and reports. Review the `[content]` lines in a dry run.
 
 ## Python: `pdf-metadata-tool` (legacy)

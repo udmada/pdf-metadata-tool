@@ -43,6 +43,7 @@ Everything except `PDFReader` is pure and works on plain values, so it is tested
 - **KeywordParser.swift** - Parses an explicit "Keywords" section
 - **Planning.swift** - `MetadataResolver` (combines the sources), `ChangePlan` (field changes and rename for one file), `FilenameBuilder`
 - **Applying.swift** - `PDFWriter` (PDFKit rewrite to a staging file, verified before it replaces the original), `FileOperations` (backup, rename), `ChangeApplier` (carries out a `FilePlan`)
+- **XMP.swift** - `XMPPacket` (reads and edits the XMP XML with `XMLDocument`), `PDFXMP` (finds the catalog's metadata stream and replaces it by appending an incremental update). PDFKit never touches XMP, so `PDFWriter` calls these on the file PDFKit just wrote. `PDFXMP` only parses classic cross-reference tables, which is all PDFKit emits; do not point it at arbitrary PDFs and expect an answer
 - **Text.swift** - HTML stripping and text normalisation helpers
 
 ### `Sources/pdfmeta` (CLI)
