@@ -6,10 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 A tool that extracts, fixes, and enhances the metadata of academic PDFs for display in Books and Preview, and renames the files after their titles.
 
-It is mid-migration from Python to Swift:
+It has been rewritten from Python to Swift:
 
-- **Swift (`pdfmeta`)** is where new work goes. It currently reads and previews only: `extract` and `process-all --dry-run`. Writing metadata and renaming files are not implemented.
-- **Python (`pdf-metadata-tool`, under `src/`)** is the legacy implementation and still the only one that writes. Fix it only if asked; do not add features to it.
+- **Swift (`pdfmeta`)** is the tool and where all work goes: `extract`, and `process-all` with or without `--dry-run`.
+- **Python (`pdf-metadata-tool`, under `src/`)** is the legacy implementation, kept for reference. Fix it only if asked; do not add features to it.
 
 ## Commands
 
@@ -18,7 +18,10 @@ It is mid-migration from Python to Swift:
 - `swift build -c release` - Build the CLI
 - `swift run -c release pdfmeta extract <path> [--json]` - Show resolved metadata
 - `swift run -c release pdfmeta process-all <path> --dry-run` - Preview metadata changes and renames
+- `swift run -c release pdfmeta process-all <path> [--no-backup]` - Apply them
 - Shared flags: `-r/--recursive`, `--no-doi-lookup`
+
+Never run `process-all` without `--dry-run` on the user's real library unless they ask for that run; try changes on copies.
 
 ### Python (legacy)
 - `uv sync` - Install dependencies
@@ -39,6 +42,7 @@ Everything except `PDFReader` is pure and works on plain values, so it is tested
 - **Heuristics.swift** - `TitleMatcher`, `TitleExtractor` (largest text on page 1), `AuthorFormatter`, `Boilerplate` (junk titles, publisher names, corrupted keywords)
 - **KeywordParser.swift** - Parses an explicit "Keywords" section
 - **Planning.swift** - `MetadataResolver` (combines the sources), `ChangePlan` (field changes and rename for one file), `FilenameBuilder`
+- **Applying.swift** - `PDFWriter` (PDFKit rewrite to a staging file, verified before it replaces the original), `FileOperations` (backup, rename), `ChangeApplier` (carries out a `FilePlan`)
 - **Text.swift** - HTML stripping and text normalisation helpers
 
 ### `Sources/pdfmeta` (CLI)
@@ -51,7 +55,8 @@ swift-argument-parser commands and terminal output only; no logic that needs tes
 - Title precedence: confirmed CrossRef title, then a non-junk stored title, then the largest text on page 1.
 - A stored title that matches CrossRef's apart from punctuation, case or a trailing footnote digit is kept.
 - A failed lookup marks the result `isIncomplete`, and `ChangePlan` then proposes nothing for that file.
-- Titles guessed from page content do not rename files that already have readable names.
+- Only a CrossRef-confirmed title renames a file that already has a readable name. Stored and guessed titles do not, which also keeps a second run from acting on a guess the first run wrote.
+- Applying must be idempotent: a second `process-all` over the same files changes nothing.
 
 ### Author Format Standards
 
@@ -67,6 +72,7 @@ Books has a single author string, so authors are formatted as:
 - `RegressionTests.swift` holds cases found by dry-running against a real library of papers; when a dry run turns up a wrong result, add the case there first.
 - `PDFReaderTests` generate their PDFs with CoreGraphics at run time; `*.pdf` is gitignored, so do not rely on fixture files.
 - CrossRef is never called from tests; use the fake lookups in the test target.
+- Run the suite under a hard time limit (it finishes in under a second). The machine's disk is nearly full, and a runaway allocation in a test once filled it with swap within seconds. Never concatenate onto an unbounded lazy sequence (`[x] + (1...).lazy.map`): `+` builds a real array.
 - Before any feature that writes to PDFs is run on a real library, dry-run it and review the output.
 
 ## Python Architecture (legacy)
