@@ -62,7 +62,7 @@ public protocol DOILookup: Sendable {
 }
 
 public enum MetadataSource: String, Sendable, Encodable {
-    case crossref, existing, content, manual, none
+    case crossref, existing, content, none
 }
 
 public struct ResolvedMetadata: Equatable, Sendable, Encodable {
@@ -78,20 +78,6 @@ public struct ResolvedMetadata: Equatable, Sendable, Encodable {
     public var isIncomplete = false
 
     public init() {}
-
-    /// Stored metadata with the given fields replaced by values a person supplied; fields not given are kept.
-    public init(keeping existing: ExistingMetadata, title: String? = nil, author: String? = nil, subject: String? = nil, keywords: [String]? = nil) {
-        // A blank value clears the field, except the title, which is never cleared.
-        func given(_ value: String?) -> String? {
-            let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            return trimmed.isEmpty ? nil : trimmed
-        }
-        self.title = given(title) ?? existing.title
-        self.author = author == nil ? existing.author : given(author)
-        self.subject = subject == nil ? existing.subject : given(subject)
-        self.keywords = keywords ?? existing.keywords
-        titleSource = given(title) != nil ? .manual : existing.title != nil ? .existing : .none
-    }
 }
 
 public struct FieldChange: Equatable, Sendable {

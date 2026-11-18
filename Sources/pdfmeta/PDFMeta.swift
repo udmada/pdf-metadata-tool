@@ -7,7 +7,7 @@ struct PDFMeta: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "pdfmeta",
         abstract: "Extract, fix, and rename PDFs with proper metadata.",
-        subcommands: [Extract.self, ProcessAll.self, SetMetadata.self]
+        subcommands: [Extract.self, ProcessAll.self]
     )
 }
 
@@ -143,7 +143,14 @@ struct ProcessAll: AsyncParsableCommand {
                 print(Style.dim("✓ \(file.lastPathComponent)"))
                 return
             }
-            printPlan(plan, metadata: metadata, for: file)
+            print(Style.bold(file.lastPathComponent))
+            for change in plan.changes {
+                // Say where a new title came from: one read off the page deserves a second look.
+                let source = change.field == "Title" ? Style.dim(" [\(metadata.titleSource.rawValue)]") : ""
+                print("  \(change.field.column)\(Style.dim(change.old ?? "—")) → \(change.new ?? Style.dim("(cleared)"))\(source)")
+            }
+            if let name = plan.newFilename { print("  \("Rename".column)→ \(Style.green(name))") }
+            for warning in metadata.warnings { print(Style.yellow("  ⚠ \(warning)")) }
 
             if !dryRun {
                 do {
@@ -164,68 +171,6 @@ struct ProcessAll: AsyncParsableCommand {
 
         let (updated, renamed) = dryRun ? ("would update metadata in", "would rename") : ("updated metadata in", "renamed")
         print("\n\(dryRun ? "Dry run" : "Done"): \(files.count) PDFs · \(updated) \(updates) · \(renamed) \(renames) · \(warnings) warnings · \(failures) failed\(staleXMP > 0 ? " · \(staleXMP) with XMP left as is" : "")")
-    }
-}
-
-/// Prints what a plan changes for one file.
-func printPlan(_ plan: FilePlan, metadata: ResolvedMetadata, for file: URL) {
-    print(Style.bold(file.lastPathComponent))
-    for change in plan.changes {
-        // Say where a new title came from: one read off the page deserves a second look.
-        let source = change.field == "Title" ? Style.dim(" [\(metadata.titleSource.rawValue)]") : ""
-        print("  \(change.field.column)\(Style.dim(change.old ?? "—")) → \(change.new ?? Style.dim("(cleared)"))\(source)")
-    }
-    if let name = plan.newFilename { print("  \("Rename".column)→ \(Style.green(name))") }
-    for warning in metadata.warnings { print(Style.yellow("  ⚠ \(warning)")) }
-}
-
-struct SetMetadata: ParsableCommand {
-    static let configuration = CommandConfiguration(
-        commandName: "set",
-        abstract: "Set metadata by hand for one PDF, for papers no registry knows. A new title also renames the file."
-    )
-
-    @Argument(help: "The PDF to change.")
-    var path: String
-
-    @Option(help: "New title.")
-    var title: String?
-
-    @Option(help: "New author string, e.g. \"A One, B Two, and C Three\".")
-    var author: String?
-
-    @Option(help: "New subject, usually the journal or kind of document.")
-    var subject: String?
-
-    @Option(help: "New keywords, separated by commas or semicolons.")
-    var keywords: String?
-
-    @Flag(name: .customLong("dry-run"), help: "Preview changes without applying them.")
-    var dryRun = false
-
-    @Flag(inversion: .prefixedNo, help: "Copy the PDF into a backups folder beside it before rewriting it.")
-    var backup = true
-
-    func run() throws {
-        let file = URL(fileURLWithPath: (path as NSString).expandingTildeInPath)
-        let existing = try PDFReader.snapshot(of: file).existing
-        let metadata = ResolvedMetadata(keeping: existing, title: title, author: author, subject: subject,
-                                        keywords: keywords.map(KeywordParser.split))
-        let folder = file.deletingLastPathComponent()
-        let plan = ChangePlan.make(currentFilename: file.lastPathComponent, existing: existing, resolved: metadata) {
-            FileManager.default.fileExists(atPath: folder.appendingPathComponent($0).path)
-        }
-        guard !plan.changes.isEmpty || plan.newFilename != nil else {
-            print(Style.dim("✓ \(file.lastPathComponent)"))
-            return
-        }
-        printPlan(plan, metadata: metadata, for: file)
-        if !dryRun {
-            let applied = try ChangeApplier.apply(plan, metadata: metadata, to: file, backup: backup)
-            if applied.xmp == .unreadable {
-                print(Style.dim("  note: embedded XMP could not be updated and keeps its old values"))
-            }
-        }
     }
 }
 

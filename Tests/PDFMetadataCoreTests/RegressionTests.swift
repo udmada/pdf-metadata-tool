@@ -206,37 +206,3 @@ struct MapLookup: DOILookup {
         #expect(TitleExtractor.title(from: runs) == "The Employment Contracts Act 1991")
     }
 }
-
-@Suite struct ManualMetadataTests {
-    let stored = ExistingMetadata(title: "An In-Depth Analysis", author: "An In and Depth Analysis", subject: "Kept Subject", keywords: ["kept"])
-
-    @Test func givenFieldsReplaceStoredOnesAndTheRestAreKept() {
-        let manual = ResolvedMetadata(keeping: stored, title: "Hatescape: An In-Depth Analysis", author: "Ciarán O’Connor")
-        #expect(manual.title == "Hatescape: An In-Depth Analysis")
-        #expect(manual.author == "Ciarán O’Connor")
-        #expect(manual.subject == "Kept Subject")
-        #expect(manual.keywords == ["kept"])
-        #expect(manual.titleSource == .manual)
-    }
-
-    @Test func withoutANewTitleTheStoredOneKeepsItsStanding() {
-        let manual = ResolvedMetadata(keeping: stored, author: "Ciarán O’Connor")
-        #expect(manual.title == "An In-Depth Analysis")
-        #expect(manual.titleSource == .existing)
-    }
-
-    @Test func anEmptyValueClearsTheField() {
-        let manual = ResolvedMetadata(keeping: stored, author: "", subject: "  ", keywords: [])
-        #expect(manual.author == nil)
-        #expect(manual.subject == nil)
-        #expect(manual.keywords == [])
-        #expect(manual.title == "An In-Depth Analysis")
-    }
-
-    @Test func aTitleTypedByAPersonRenamesAReadablyNamedFile() {
-        let manual = ResolvedMetadata(keeping: stored, title: "Hatescape: An In-Depth Analysis")
-        let plan = ChangePlan.make(currentFilename: "An In-Depth Analysis.pdf", existing: stored, resolved: manual, exists: { _ in false })
-        #expect(plan.newFilename == "Hatescape - An In-Depth Analysis.pdf")
-        #expect(plan.changes == [FieldChange(field: "Title", old: "An In-Depth Analysis", new: "Hatescape: An In-Depth Analysis")])
-    }
-}
