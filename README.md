@@ -85,6 +85,16 @@ Answers are cached in `~/Library/Caches/pdfmeta/crossref`, so a preview and the 
 - An embedded XMP block that is compressed with anything other than Deflate, or sits in a PDF structure the tool does not recognise, is left with its old values; the run reports how many.
 - A title guessed from the page can be wrong, typically on books and reports. Review the `[content]` lines in a dry run.
 
+### Prebuilt binary
+
+Every push builds a universal macOS binary in GitHub Actions; download it from the run's `pdfmeta-macos-universal` artifact. Tags named `v*` also publish it as a release:
+
+```sh
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+The workflows are written in [Pkl](https://pkl-lang.org) under `.github/pkl/`. After changing them, regenerate the YAML with `mise run pkl:gen` and commit both.
+
 ## Python: `pdf-metadata-tool` (legacy)
 
 ```sh

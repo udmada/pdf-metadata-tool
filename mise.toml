@@ -1,5 +1,6 @@
 [tools]
 uv = "latest"
+pkl = "latest"
 
 [settings]
 # tools can read the versions files used by other version managers
@@ -20,3 +21,7 @@ not_found_auto_install = true # see MISE_NOT_FOUND_AUTO_INSTALL
 env_file = '.env' # load env vars from a dotenv file, see `MISE_ENV_FILE`
 
 experimental = true # enable experimental features
+
+[tasks."pkl:gen"]
+description = "Generate GitHub Actions YAML from pkl sources"
+run = "pkl eval -m .github/ --project-dir .github/pkl .github/pkl/index.pkl"

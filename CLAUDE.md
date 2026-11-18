@@ -24,6 +24,12 @@ It has been rewritten from Python to Swift:
 
 Never run `process-all` without `--dry-run` on the user's real library unless they ask for that run; try changes on copies.
 
+### CI
+- Workflows are written in Pkl under `.github/pkl/` (pkl-pantry `com.github.actions`); the YAML in `.github/workflows/` and `.github/dependabot.yml` is generated. Never edit the YAML by hand.
+- `mise run pkl:gen` regenerates it. A new action version gets its commit SHA resolved and recorded in `.github/workflows/__lockfile__.yml`, which Dependabot keeps up to date.
+- `build.yml` runs on every push: tests, then a universal (arm64 + x86_64) macOS binary uploaded as the `pdfmeta-macos-universal` artifact. Pushing a `v*` tag also publishes it as a GitHub release.
+- `pkl-check.yml` fails if the committed YAML differs from what the Pkl sources generate.
+
 ### Python (legacy)
 - `uv sync` - Install dependencies
 - `uv run pdf-metadata-tool <extract|rename|fix-metadata|process-all> <path> [--dry-run]`
