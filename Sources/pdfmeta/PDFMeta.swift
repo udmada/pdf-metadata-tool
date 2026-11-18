@@ -109,7 +109,7 @@ struct Extract: AsyncParsableCommand {
 struct ProcessAll: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "process-all",
-        abstract: "Fix metadata and rename files."
+        abstract: "Fix metadata and rename files. Currently preview-only: requires --dry-run."
     )
 
     @OptionGroup var input: InputOptions
@@ -117,8 +117,11 @@ struct ProcessAll: AsyncParsableCommand {
     @Flag(name: .customLong("dry-run"), help: "Preview changes without applying them.")
     var dryRun = false
 
-    @Flag(inversion: .prefixedNo, help: "Copy each PDF into a backups folder beside it before rewriting it.")
-    var backup = true
+    func validate() throws {
+        guard dryRun else {
+            throw ValidationError("Writing changes is not implemented yet; pass --dry-run to preview.")
+        }
+    }
 
     func run() async throws {
         let files = try input.files()
@@ -137,7 +140,6 @@ struct ProcessAll: AsyncParsableCommand {
             let plan = ChangePlan.make(currentFilename: file.lastPathComponent, existing: resolution.snapshot.existing, resolved: metadata) {
                 FileManager.default.fileExists(atPath: folder.appendingPathComponent($0).path)
             }
-            warnings += metadata.warnings.count
 
             if plan.changes.isEmpty, plan.newFilename == nil, metadata.warnings.isEmpty {
                 print(Style.dim("✓ \(file.lastPathComponent)"))
@@ -152,21 +154,12 @@ struct ProcessAll: AsyncParsableCommand {
             if let name = plan.newFilename { print("  \("Rename".column)→ \(Style.green(name))") }
             for warning in metadata.warnings { print(Style.yellow("  ⚠ \(warning)")) }
 
-            if !dryRun {
-                do {
-                    _ = try ChangeApplier.apply(plan, metadata: metadata, to: file, backup: backup)
-                } catch {
-                    print(Style.red("  ✗ \(error.localizedDescription)"))
-                    failures += 1
-                    return
-                }
-            }
             if !plan.changes.isEmpty { updates += 1 }
             if plan.newFilename != nil { renames += 1 }
+            warnings += metadata.warnings.count
         }
 
-        let (updated, renamed) = dryRun ? ("would update metadata in", "would rename") : ("updated metadata in", "renamed")
-        print("\n\(dryRun ? "Dry run" : "Done"): \(files.count) PDFs · \(updated) \(updates) · \(renamed) \(renames) · \(warnings) warnings · \(failures) failed")
+        print("\nDry run: \(files.count) PDFs · would update metadata in \(updates) · would rename \(renames) · \(warnings) warnings · \(failures) unreadable")
     }
 }
 

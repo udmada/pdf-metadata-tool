@@ -2,42 +2,29 @@
 
 Fixes the metadata of academic PDFs so they show up properly in Books and Preview, and renames the files after their titles.
 
-The tool has been rewritten from Python to Swift. The Swift version (`pdfmeta`) is the one to use; the original Python version is kept for reference.
+The tool is being rewritten from Python to Swift. The Swift version (`pdfmeta`) reads PDFs and previews what it would change; it does not write yet. The original Python version still does the writing and renaming.
+
+| | Swift `pdfmeta` | Python `pdf-metadata-tool` |
+|---|---|---|
+| Extract metadata | yes | yes |
+| Preview changes (`--dry-run`) | yes | yes |
+| Write metadata, rename files | not yet | yes |
+| Requires | macOS 14+, Swift 6 | uv, exiftool |
 
 ## Swift: `pdfmeta`
 
-Requires macOS 14+ and Swift 6.
-
 ```sh
 swift build -c release
-swift run -c release pdfmeta extract paper.pdf               # show what would be used
-swift run -c release pdfmeta process-all ~/Papers --dry-run  # preview changes
-swift run -c release pdfmeta process-all ~/Papers            # apply them
+swift run -c release pdfmeta extract paper.pdf
+swift run -c release pdfmeta process-all ~/Papers --dry-run
 swift test
 ```
 
-Options:
+Options for both commands:
 
 - `-r`, `--recursive`: descend into subfolders (folders named `backups` are skipped)
 - `--no-doi-lookup`: work offline, without asking CrossRef
 - `extract --json`: machine-readable output
-- `process-all --dry-run`: preview only
-- `process-all --no-backup`: do not keep a copy of each rewritten PDF
-
-Running `process-all` twice changes nothing the second time.
-
-### What applying does
-
-For each PDF whose title, author, subject or keywords would change:
-
-1. The original is copied to `backups/<name>.backup.pdf` beside it (unless `--no-backup`).
-2. PDFKit rewrites the file to a staging location with the new fields.
-3. The staged copy is reopened and checked: same page count, fields read back as written.
-4. Only then does it replace the original.
-
-The file is then renamed if its name should change; a rename never overwrites another file. A rename on its own does not rewrite or back up the file. Encrypted PDFs are left alone.
-
-Bookmarks, annotations, links and page text survive the rewrite. This was checked on 142 real papers, where file size stayed within a few percent for all but one.
 
 ### How metadata is chosen
 
@@ -56,7 +43,7 @@ Files are named `<title>.pdf`, with `:` written as ` -`.
 ### Safety rules
 
 - If the CrossRef lookup fails (timeout, rate limit), the file is left alone rather than filled with guesses.
-- Only a CrossRef-confirmed title renames a file that already has a readable name; stored and guessed titles rename machine-named files only.
+- A title guessed from the page never renames a file that already has a readable name.
 - A file is never renamed to a cut-off version of its current name.
 - A stored title is never cleared.
 
@@ -69,10 +56,8 @@ Answers are cached in `~/Library/Caches/pdfmeta/crossref`, so a preview and the 
 - CrossRef's own mistakes pass through, such as authors registered surname-first.
 - A keyword list that wraps mid-phrase can lose its last words.
 - PDFs whose text layer has no word spacing yield run-together keywords.
-- Only the PDF's info dictionary is updated. An embedded XMP metadata block keeps its old values, which matters only to software that prefers XMP; Books and Preview read the info dictionary.
-- A title guessed from the page can be wrong, typically on books and reports. Review the `[content]` lines in a dry run.
 
-## Python: `pdf-metadata-tool` (legacy)
+## Python: `pdf-metadata-tool`
 
 ```sh
 uv sync
