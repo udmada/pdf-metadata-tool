@@ -27,7 +27,7 @@ Never run `process-all` without `--dry-run` on the user's real library unless th
 ### CI
 - Workflows are written in Pkl under `.github/pkl/` (pkl-pantry `com.github.actions`); the YAML in `.github/workflows/` and `.github/dependabot.yml` is generated. Never edit the YAML by hand.
 - `mise run pkl:gen` regenerates it. A new action version gets its commit SHA resolved and recorded in `.github/workflows/__lockfile__.yml`, which Dependabot keeps up to date.
-- `build.yml` runs on every push: a matrix tests and builds natively on arm64 (`macos-26`) and x86_64 (`macos-15-intel`), a follow-up job joins the two with `lipo` into a universal binary, and a `v*` tag publishes all three tarballs as a GitHub release. There is no Linux leg: PDFKit, AppKit fonts and `NSData` zlib decompression are Apple-only.
+- `build.yml` runs on every push: tests, then a universal (arm64 + x86_64) macOS binary uploaded as the `pdfmeta-macos-universal` artifact. Pushing a `v*` tag also publishes it as a GitHub release.
 - `pkl-check.yml` fails if the committed YAML differs from what the Pkl sources generate.
 
 ### Python (legacy)
