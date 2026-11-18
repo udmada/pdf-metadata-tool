@@ -82,12 +82,13 @@ Answers are cached in `~/Library/Caches/pdfmeta/crossref`, so a preview and the 
 - CrossRef's own mistakes pass through, such as authors registered surname-first.
 - A keyword list that wraps mid-phrase can lose its last words.
 - PDFs whose text layer has no word spacing yield run-together keywords.
+- macOS only. PDF reading and writing go through PDFKit, which has no Linux or Windows version; other platforms would need a different PDF library.
 - An embedded XMP block that is compressed with anything other than Deflate, or sits in a PDF structure the tool does not recognise, is left with its old values; the run reports how many.
 - A title guessed from the page can be wrong, typically on books and reports. Review the `[content]` lines in a dry run.
 
 ### Prebuilt binary
 
-Every push builds a universal macOS binary in GitHub Actions; download it from the run's `pdfmeta-macos-universal` artifact. Tags named `v*` also publish it as a release:
+Every push builds and tests the tool natively on Apple silicon (`macos-26`) and Intel (`macos-15-intel`) runners, then joins the two into a universal binary. Each run has three artifacts: `pdfmeta-macos-arm64`, `pdfmeta-macos-x86_64` and `pdfmeta-macos-universal`. Tags named `v*` also publish all three as a release:
 
 ```sh
 git tag v0.1.0 && git push origin v0.1.0
