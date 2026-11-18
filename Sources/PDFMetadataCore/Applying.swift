@@ -5,8 +5,6 @@ public struct AppliedChange: Equatable, Sendable {
     public var finalURL: URL
     public var wroteMetadata: Bool
     public var backupURL: URL?
-    /// What happened to the embedded XMP block, when the file was rewritten.
-    public var xmp: XMPOutcome?
 }
 
 public enum PDFWriter {
@@ -31,8 +29,7 @@ public enum PDFWriter {
     ///
     /// The file is rewritten to a staging location and checked before it replaces the original,
     /// so a failure at any point leaves the original as it was.
-    @discardableResult
-    public static func write(_ metadata: ResolvedMetadata, to url: URL) throws -> XMPOutcome {
+    public static func write(_ metadata: ResolvedMetadata, to url: URL) throws {
         guard let document = PDFDocument(url: url) else { throw WriteError.unreadable }
         // PDFKit would silently drop the encryption on save.
         guard !document.isEncrypted else { throw WriteError.encrypted }
@@ -57,36 +54,9 @@ public enum PDFWriter {
         let staged = staging.appendingPathComponent(url.lastPathComponent)
         guard document.write(to: staged) else { throw WriteError.writeFailed }
 
-        func stagedCopyIsSound() -> Bool {
-            guard let written = PDFDocument(url: staged) else { return false }
-            return written.pageCount == document.pageCount && matches(written.documentAttributes ?? [:], attributes)
-        }
-        guard stagedCopyIsSound() else { throw WriteError.verificationFailed }
-
-        // PDFKit carries an embedded XMP block over untouched, so it is brought into line separately.
-        let rewritten = try Data(contentsOf: staged)
-        var outcome = XMPOutcome.absent
-        switch PDFXMP.locate(in: rewritten) {
-        case .absent:
-            break
-        case .unreadable:
-            outcome = .unreadable
-        case .found(_, let packet):
-            outcome = .unreadable
-            if let updated = XMPPacket.updating(packet, with: metadata),
-               let patched = PDFXMP.replacingPacket(in: rewritten, with: updated) {
-                try patched.write(to: staged)
-                if stagedCopyIsSound() {
-                    outcome = .updated
-                } else {
-                    // Fall back to the copy already known to be good.
-                    try rewritten.write(to: staged)
-                }
-            }
-        }
-
+        guard let written = PDFDocument(url: staged), written.pageCount == document.pageCount,
+              matches(written.documentAttributes ?? [:], attributes) else { throw WriteError.verificationFailed }
         _ = try FileManager.default.replaceItemAt(url, withItemAt: staged)
-        return outcome
     }
 
     private static func matches(_ written: [AnyHashable: Any], _ intended: [AnyHashable: Any]) -> Bool {
@@ -146,7 +116,7 @@ public enum ChangeApplier {
         if !plan.changes.isEmpty {
             // Only a rewrite puts the file's contents at risk; a rename alone needs no copy.
             if backup { applied.backupURL = try FileOperations.backup(url) }
-            applied.xmp = try PDFWriter.write(metadata, to: url)
+            try PDFWriter.write(metadata, to: url)
             applied.wroteMetadata = true
         }
         if let name = plan.newFilename {

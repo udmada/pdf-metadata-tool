@@ -122,7 +122,7 @@ struct ProcessAll: AsyncParsableCommand {
 
     func run() async throws {
         let files = try input.files()
-        var (updates, renames, warnings, failures, staleXMP) = (0, 0, 0, 0, 0)
+        var (updates, renames, warnings, failures) = (0, 0, 0, 0)
 
         await resolve(files, with: input.resolver) { file, result in
             guard case .success(let resolution) = result else {
@@ -154,11 +154,7 @@ struct ProcessAll: AsyncParsableCommand {
 
             if !dryRun {
                 do {
-                    let applied = try ChangeApplier.apply(plan, metadata: metadata, to: file, backup: backup)
-                    if applied.xmp == .unreadable {
-                        print(Style.dim("  note: embedded XMP could not be updated and keeps its old values"))
-                        staleXMP += 1
-                    }
+                    _ = try ChangeApplier.apply(plan, metadata: metadata, to: file, backup: backup)
                 } catch {
                     print(Style.red("  ✗ \(error.localizedDescription)"))
                     failures += 1
@@ -170,7 +166,7 @@ struct ProcessAll: AsyncParsableCommand {
         }
 
         let (updated, renamed) = dryRun ? ("would update metadata in", "would rename") : ("updated metadata in", "renamed")
-        print("\n\(dryRun ? "Dry run" : "Done"): \(files.count) PDFs · \(updated) \(updates) · \(renamed) \(renames) · \(warnings) warnings · \(failures) failed\(staleXMP > 0 ? " · \(staleXMP) with XMP left as is" : "")")
+        print("\n\(dryRun ? "Dry run" : "Done"): \(files.count) PDFs · \(updated) \(updates) · \(renamed) \(renames) · \(warnings) warnings · \(failures) failed")
     }
 }
 
