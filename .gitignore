@@ -17,4 +17,3 @@ debug*.py
 fix*.py
 test*.py
 *error.py
-.build/
