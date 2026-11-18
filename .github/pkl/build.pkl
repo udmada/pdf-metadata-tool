@@ -3,9 +3,8 @@ amends "@com.github.actions/Workflow.pkl"
 import "@com.github.actions/catalog.pkl"
 import "@com.github.actions/Step.pkl"
 
-local artifactName = "pdfmeta-macos-universal"
-// both architectures in one binary; SwiftPM puts a multi-arch build under .build/apple
-local buildArgs = "-c release --arch arm64 --arch x86_64"
+// artifacts are named <prefix>-<arch>: arm64, x86_64, universal
+local artifactPrefix = "pdfmeta-macos"
 
 name = "Build pdfmeta"
 
@@ -32,11 +31,27 @@ concurrency {
 }
 
 jobs {
+  // PDFKit only exists on macOS, so the matrix is macOS-only. Each architecture builds
+  // and tests on a native runner, so the binary shipped is the one that was tested.
   ["build"] {
-    name = "Test and build"
-    // PDFKit only exists on macOS
-    `runs-on` = "macos-26"
+    name = "Test and build (${{ matrix.arch }})"
+    `runs-on` = "${{ matrix.runner }}"
     `timeout-minutes` = 30
+    strategy {
+      `fail-fast` = false
+      matrix {
+        ["include"] {
+          new Dynamic {
+            arch = "arm64"
+            runner = "macos-26"
+          }
+          new Dynamic {
+            arch = "x86_64"
+            runner = "macos-15-intel"
+          }
+        }
+      }
+    }
     steps {
       (catalog.`actions/checkout@v6`) {
         with {
@@ -55,22 +70,60 @@ jobs {
         run = "swift test"
       }
       (Step) {
-        name = "Build universal binary"
+        name = "Build"
         run =
           """
-          swift build \(buildArgs)
-          bin="$(swift build \(buildArgs) --show-bin-path)/pdfmeta"
+          args="-c release --arch ${{ matrix.arch }}"
+          swift build $args
+          bin="$(swift build $args --show-bin-path)/pdfmeta"
           lipo -info "$bin"
           "$bin" --help
           mkdir -p dist
-          tar -czf "dist/\(artifactName).tar.gz" -C "$(dirname "$bin")" pdfmeta
+          tar -czf "dist/\(artifactPrefix)-${{ matrix.arch }}.tar.gz" -C "$(dirname "$bin")" pdfmeta
           """
       }
       (catalog.`actions/upload-artifact@v7`) {
         with {
-          name = artifactName
+          name = "\(artifactPrefix)-${{ matrix.arch }}"
           pathList {
-            "dist/\(artifactName).tar.gz"
+            "dist/\(artifactPrefix)-${{ matrix.arch }}.tar.gz"
+          }
+          `if-no-files-found` = "error"
+        }
+      }
+    }
+  }
+  // joins the two tested binaries rather than compiling a third time
+  ["universal"] {
+    name = "Universal binary"
+    needs = "build"
+    `runs-on` = "macos-26"
+    steps {
+      (catalog.`actions/download-artifact@v8`) {
+        with {
+          pattern = "\(artifactPrefix)-*"
+          path = "dist"
+          `merge-multiple` = true
+        }
+      }
+      (Step) {
+        name = "Merge with lipo"
+        run =
+          """
+          mkdir -p arm64 x86_64
+          tar -xzf "dist/\(artifactPrefix)-arm64.tar.gz" -C arm64
+          tar -xzf "dist/\(artifactPrefix)-x86_64.tar.gz" -C x86_64
+          lipo -create arm64/pdfmeta x86_64/pdfmeta -output pdfmeta
+          lipo -info pdfmeta
+          ./pdfmeta --help
+          tar -czf "dist/\(artifactPrefix)-universal.tar.gz" pdfmeta
+          """
+      }
+      (catalog.`actions/upload-artifact@v7`) {
+        with {
+          name = "\(artifactPrefix)-universal"
+          pathList {
+            "dist/\(artifactPrefix)-universal.tar.gz"
           }
           `if-no-files-found` = "error"
         }
@@ -80,7 +133,7 @@ jobs {
   ["release"] {
     name = "Create release"
     `if` = "startsWith(github.ref, 'refs/tags/v')"
-    needs = "build"
+    needs = "universal"
     `runs-on` = "ubuntu-slim"
     permissions {
       contents = "write"
@@ -88,8 +141,9 @@ jobs {
     steps {
       (catalog.`actions/download-artifact@v8`) {
         with {
-          name = artifactName
+          pattern = "\(artifactPrefix)-*"
           path = "dist"
+          `merge-multiple` = true
         }
       }
       (Step) {

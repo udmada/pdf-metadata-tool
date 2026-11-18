@@ -14,8 +14,16 @@ permissions:
   contents: read
 jobs:
   build:
-    name: Test and build
-    runs-on: macos-26
+    name: Test and build (${{ matrix.arch }})
+    strategy:
+      matrix:
+        include:
+        - arch: arm64
+          runner: macos-26
+        - arch: x86_64
+          runner: macos-15-intel
+      fail-fast: false
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     steps:
     - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -26,14 +34,39 @@ jobs:
     - name: Test
       timeout-minutes: 10
       run: swift test
-    - name: Build universal binary
+    - name: Build
       run: |-
-        swift build -c release --arch arm64 --arch x86_64
-        bin="$(swift build -c release --arch arm64 --arch x86_64 --show-bin-path)/pdfmeta"
+        args="-c release --arch ${{ matrix.arch }}"
+        swift build $args
+        bin="$(swift build $args --show-bin-path)/pdfmeta"
         lipo -info "$bin"
         "$bin" --help
         mkdir -p dist
-        tar -czf "dist/pdfmeta-macos-universal.tar.gz" -C "$(dirname "$bin")" pdfmeta
+        tar -czf "dist/pdfmeta-macos-${{ matrix.arch }}.tar.gz" -C "$(dirname "$bin")" pdfmeta
+    - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+      with:
+        name: pdfmeta-macos-${{ matrix.arch }}
+        path: dist/pdfmeta-macos-${{ matrix.arch }}.tar.gz
+        if-no-files-found: error
+  universal:
+    name: Universal binary
+    needs: build
+    runs-on: macos-26
+    steps:
+    - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+      with:
+        path: dist
+        pattern: pdfmeta-macos-*
+        merge-multiple: true
+    - name: Merge with lipo
+      run: |-
+        mkdir -p arm64 x86_64
+        tar -xzf "dist/pdfmeta-macos-arm64.tar.gz" -C arm64
+        tar -xzf "dist/pdfmeta-macos-x86_64.tar.gz" -C x86_64
+        lipo -create arm64/pdfmeta x86_64/pdfmeta -output pdfmeta
+        lipo -info pdfmeta
+        ./pdfmeta --help
+        tar -czf "dist/pdfmeta-macos-universal.tar.gz" pdfmeta
     - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
       with:
         name: pdfmeta-macos-universal
@@ -42,15 +75,16 @@ jobs:
   release:
     name: Create release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: universal
     permissions:
       contents: write
     runs-on: ubuntu-slim
     steps:
     - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
       with:
-        name: pdfmeta-macos-universal
         path: dist
+        pattern: pdfmeta-macos-*
+        merge-multiple: true
     - name: Publish
       env:
         GH_TOKEN: ${{ github.token }}
