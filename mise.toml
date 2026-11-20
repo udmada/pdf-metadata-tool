@@ -1,12 +1,7 @@
 [tools]
-uv = "latest"
 pkl = "latest"
 
 [settings]
-# tools can read the versions files used by other version managers
-# for example, .nvmrc in the case of node's nvm
-idiomatic_version_file_enable_tools = ['node']
-
 # configure `mise install` to always keep the downloaded archive
 always_keep_download = false # deleted after install by default
 always_keep_install = false  # deleted on failure by default
@@ -21,6 +16,23 @@ not_found_auto_install = true # see MISE_NOT_FOUND_AUTO_INSTALL
 env_file = '.env' # load env vars from a dotenv file, see `MISE_ENV_FILE`
 
 experimental = true # enable experimental features
+
+[tasks.build]
+description = "Build pdfmeta for release; extra arguments go to swift build, e.g. --arch arm64"
+run = "swift build -c release"
+
+[tasks.test]
+description = "Run the unit tests, killed if they run past 60 seconds"
+# the suite takes about a second; a runaway test once filled the disk with swap,
+# so the whole process group is killed at the limit
+run = '''
+swift build --build-tests
+perl -e '$pid = fork; if (!$pid) { setpgrp(0, 0); exec @ARGV } $SIG{ALRM} = sub { kill "KILL", -$pid; die "tests killed after 60 seconds\n" }; alarm 60; waitpid($pid, 0); exit($? >> 8)' swift test --skip-build
+'''
+
+[tasks.pdfmeta]
+description = "Build if needed and run pdfmeta, e.g. mise run pdfmeta process-all ~/Papers --dry-run"
+run = "swift run -c release --quiet pdfmeta"
 
 [tasks."pkl:gen"]
 description = "Generate GitHub Actions YAML from pkl sources"

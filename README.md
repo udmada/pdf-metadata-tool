@@ -2,19 +2,26 @@
 
 Fixes the metadata of academic PDFs so they show up properly in Books and Preview, and renames the files after their titles.
 
-The tool has been rewritten from Python to Swift. The Swift version (`pdfmeta`) is the one to use; the original Python version is kept for reference.
+The command is `pdfmeta`, written in Swift on top of PDFKit.
 
-## Swift: `pdfmeta`
+## Usage
 
-Requires macOS 14+ and Swift 6.
+Requires macOS 14+, Swift 6 (Xcode) and [mise](https://mise.jdx.dev). Compiling and running go through mise tasks:
 
 ```sh
-swift build -c release
-swift run -c release pdfmeta extract paper.pdf               # show what would be used
-swift run -c release pdfmeta process-all ~/Papers --dry-run  # preview changes
-swift run -c release pdfmeta process-all ~/Papers            # apply them
-swift test
+mise run pdfmeta extract paper.pdf               # show what would be used
+mise run pdfmeta process-all ~/Papers --dry-run  # preview changes
+mise run pdfmeta process-all ~/Papers            # apply them
 ```
+
+`mise run pdfmeta` builds the tool if needed, then runs it with the arguments you give. To pass `--help`, put `--` first so mise doesn't take it: `mise run pdfmeta -- --help`.
+
+| Task | What it does |
+|---|---|
+| `mise run pdfmeta <args>` | Build if needed, then run `pdfmeta` |
+| `mise run build` | Release build; extra arguments go to `swift build` (e.g. `--arch arm64`) |
+| `mise run test` | Unit tests, killed if they run past 60 seconds |
+| `mise run pkl:gen` | Regenerate the GitHub Actions YAML from the Pkl sources |
 
 Options:
 
@@ -26,19 +33,19 @@ Options:
 
 Running `process-all` twice changes nothing the second time.
 
-### Fixing a paper by hand
+## Fixing a paper by hand
 
 Books, theses, reports and preprints often have no DOI that CrossRef knows, so the tool can only keep what is stored or guess. Set those yourself:
 
 ```sh
-swift run -c release pdfmeta set "An In-Depth Analysis.pdf" \
+mise run pdfmeta set "An In-Depth Analysis.pdf" \
   --title "Hatescape: An In-Depth Analysis of Extremism and Hate Speech on TikTok" \
   --author "Ciarán O’Connor" --subject "Institute for Strategic Dialogue"
 ```
 
 Only the fields you pass change; pass an empty value (`--author ""`) to clear one. A new title also renames the file. `--keywords`, `--dry-run` and `--no-backup` work as elsewhere. Later `process-all` runs leave hand-set values alone.
 
-### What applying does
+## What applying does
 
 For each PDF whose title, author, subject or keywords would change:
 
@@ -52,7 +59,7 @@ The file is then renamed if its name should change; a rename never overwrites an
 
 Bookmarks, annotations, links and page text survive the rewrite. This was checked on 142 real papers, where file size stayed within a few percent for all but one. On the same set, exiftool read back matching info and XMP values from every rewritten file, and poppler reported no new errors.
 
-### How metadata is chosen
+## How metadata is chosen
 
 1. The paper's DOI is read from its first three pages.
 2. CrossRef is asked about that DOI. Its answer is used only if the title it returns is found printed in the PDF, which rules out DOIs that belong to a cited reference.
@@ -66,18 +73,18 @@ Authors are written as one string, the form Books displays best: `A`, `A and B`,
 
 Files are named `<title>.pdf`, with `:` written as ` -`.
 
-### Safety rules
+## Safety rules
 
 - If the CrossRef lookup fails (timeout, rate limit), the file is left alone rather than filled with guesses.
 - Only a CrossRef-confirmed title renames a file that already has a readable name; stored and guessed titles rename machine-named files only.
 - A file is never renamed to a cut-off version of its current name.
 - A stored title is never cleared.
 
-### CrossRef
+## CrossRef
 
 Answers are cached in `~/Library/Caches/pdfmeta/crossref`, so a preview and the run after it see the same data; delete the folder to refetch. Lookups run one at a time, at about two seconds each on CrossRef's public pool. Set `CROSSREF_MAILTO=you@example.com` to use their faster "polite" pool.
 
-### Known limits
+## Known limits
 
 - CrossRef's own mistakes pass through, such as authors registered surname-first.
 - A keyword list that wraps mid-phrase can lose its last words.
@@ -86,7 +93,7 @@ Answers are cached in `~/Library/Caches/pdfmeta/crossref`, so a preview and the 
 - An embedded XMP block that is compressed with anything other than Deflate, or sits in a PDF structure the tool does not recognise, is left with its old values; the run reports how many.
 - A title guessed from the page can be wrong, typically on books and reports. Review the `[content]` lines in a dry run.
 
-### Prebuilt binary
+## Prebuilt binary
 
 Every push builds and tests the tool natively on Apple silicon (`macos-26`) and Intel (`macos-15-intel`) runners, then joins the two into a universal binary. Each run has three artifacts: `pdfmeta-macos-arm64`, `pdfmeta-macos-x86_64` and `pdfmeta-macos-universal`. Tags named `v*` also publish all three as a release:
 
@@ -96,12 +103,3 @@ git tag v0.1.0 && git push origin v0.1.0
 
 The workflows are written in [Pkl](https://pkl-lang.org) under `.github/pkl/`. After changing them, regenerate the YAML with `mise run pkl:gen` and commit both.
 
-## Python: `pdf-metadata-tool` (legacy)
-
-```sh
-uv sync
-uv run pdf-metadata-tool process-all <path> --dry-run
-uv run pdf-metadata-tool process-all <path>
-```
-
-Commands: `extract`, `rename`, `fix-metadata`, `process-all`. Writing keywords in the form Preview recognises needs `exiftool` on the PATH. Backups go to a `backups/` folder beside the PDFs.
