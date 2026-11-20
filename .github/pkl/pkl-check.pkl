@@ -35,8 +35,6 @@ jobs {
       (MiseAction) {
         with {
           experimental = true
-          // only pkl is needed here, not the Python toolchain
-          install_args = "pkl"
         }
       }
       (Step) {

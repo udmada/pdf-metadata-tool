@@ -16,7 +16,6 @@ jobs:
         fetch-depth: 1
     - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3
       with:
-        install_args: pkl
         experimental: true
     - name: Verify pkl gen is up to date
       run: mise run pkl:gen && git diff --exit-code .github/

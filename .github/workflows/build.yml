@@ -29,16 +29,18 @@ jobs:
     - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       with:
         fetch-depth: 1
+    - uses: jdx/mise-action@5228313ee0372e111a38da051671ca30fc5a96db # v3
+      with:
+        install: false
     - name: Show toolchain
       run: swift --version
     - name: Test
       timeout-minutes: 10
-      run: swift test
+      run: mise run test
     - name: Build
       run: |-
-        args="-c release --arch ${{ matrix.arch }}"
-        swift build $args
-        bin="$(swift build $args --show-bin-path)/pdfmeta"
+        mise run build --arch ${{ matrix.arch }}
+        bin="$(swift build -c release --arch ${{ matrix.arch }} --show-bin-path)/pdfmeta"
         lipo -info "$bin"
         "$bin" --help
         mkdir -p dist

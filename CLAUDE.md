@@ -4,37 +4,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A tool that extracts, fixes, and enhances the metadata of academic PDFs for display in Books and Preview, and renames the files after their titles.
-
-It has been rewritten from Python to Swift:
-
-- **Swift (`pdfmeta`)** is the tool and where all work goes: `extract`, and `process-all` with or without `--dry-run`.
-- **Python (`pdf-metadata-tool`, under `src/`)** is the legacy implementation, kept for reference. Fix it only if asked; do not add features to it.
+`pdfmeta` extracts, fixes, and enhances the metadata of academic PDFs for display in Books and Preview, and renames the files after their titles. It is a Swift package built on PDFKit, so it runs on macOS only.
 
 ## Commands
 
-### Swift
-- `swift test` - Run the unit tests
-- `swift build -c release` - Build the CLI
-- `swift run -c release pdfmeta extract <path> [--json]` - Show resolved metadata
-- `swift run -c release pdfmeta process-all <path> --dry-run` - Preview metadata changes and renames
-- `swift run -c release pdfmeta process-all <path> [--no-backup]` - Apply them
-- `swift run -c release pdfmeta set <file> [--title] [--author] [--subject] [--keywords]` - Set fields by hand for a paper CrossRef does not know; a new title renames the file
-- Shared flags: `-r/--recursive`, `--no-doi-lookup`
+Compiling, testing and running go through mise tasks (defined in `mise.toml`); use them rather than calling `swift` directly.
+
+- `mise run test` - Build and run the unit tests, killed after 60 seconds
+- `mise run build` - Release build; extra arguments go to `swift build` (e.g. `--arch arm64`)
+- `mise run pdfmeta <args>` - Build if needed and run the CLI; put `--` before `--help`
+  - `extract <path> [--json]` - Show resolved metadata
+  - `process-all <path> --dry-run` - Preview metadata changes and renames
+  - `process-all <path> [--no-backup]` - Apply them
+  - `set <file> [--title] [--author] [--subject] [--keywords]` - Set fields by hand for a paper CrossRef does not know; a blank value clears a field, a new title renames the file
+  - Shared flags: `-r/--recursive`, `--no-doi-lookup`
+- `mise run pkl:gen` - Regenerate the GitHub Actions YAML from the Pkl sources
 
 Never run `process-all` without `--dry-run` on the user's real library unless they ask for that run; try changes on copies.
 
 ### CI
 - Workflows are written in Pkl under `.github/pkl/` (pkl-pantry `com.github.actions`); the YAML in `.github/workflows/` and `.github/dependabot.yml` is generated. Never edit the YAML by hand.
 - `mise run pkl:gen` regenerates it. A new action version gets its commit SHA resolved and recorded in `.github/workflows/__lockfile__.yml`, which Dependabot keeps up to date.
-- `build.yml` runs on every push: a matrix tests and builds natively on arm64 (`macos-26`) and x86_64 (`macos-15-intel`), a follow-up job joins the two with `lipo` into a universal binary, and a `v*` tag publishes all three tarballs as a GitHub release. There is no Linux leg: PDFKit, AppKit fonts and `NSData` zlib decompression are Apple-only.
+- `build.yml` runs on every push: a matrix runs `mise run test` and `mise run build` natively on arm64 (`macos-26`) and x86_64 (`macos-15-intel`), a follow-up job joins the two with `lipo` into a universal binary, and a `v*` tag publishes all three tarballs as a GitHub release. There is no Linux leg: PDFKit, AppKit fonts and `NSData` zlib decompression are Apple-only.
 - `pkl-check.yml` fails if the committed YAML differs from what the Pkl sources generate.
 
-### Python (legacy)
-- `uv sync` - Install dependencies
-- `uv run pdf-metadata-tool <extract|rename|fix-metadata|process-all> <path> [--dry-run]`
-
-## Swift Architecture
+## Architecture
 
 SwiftPM package at the repo root.
 
@@ -80,13 +74,6 @@ Books has a single author string, so authors are formatted as:
 - `RegressionTests.swift` holds cases found by dry-running against a real library of papers; when a dry run turns up a wrong result, add the case there first.
 - `PDFReaderTests` generate their PDFs with CoreGraphics at run time; `*.pdf` is gitignored, so do not rely on fixture files.
 - CrossRef is never called from tests; use the fake lookups in the test target.
-- Run the suite under a hard time limit (it finishes in under a second). The machine's disk is nearly full, and a runaway allocation in a test once filled it with swap within seconds. Never concatenate onto an unbounded lazy sequence (`[x] + (1...).lazy.map`): `+` builds a real array.
+- Run the suite with `mise run test`, which kills it after 60 seconds (it finishes in under a second). The machine's disk is nearly full, and a runaway allocation in a test once filled it with swap within seconds. Never concatenate onto an unbounded lazy sequence (`[x] + (1...).lazy.map`): `+` builds a real array.
 - Before any feature that writes to PDFs is run on a real library, dry-run it and review the output.
 
-## Python Architecture (legacy)
-
-- **metadata_extractor.py** - Reads metadata (pypdf) and page text (pdfplumber); title, author, DOI and keyword heuristics
-- **metadata_editor.py** - Writes metadata with pypdf, sets Preview-compatible keywords via exiftool, handles backups
-- **file_renamer.py** - Builds "Title.pdf" filenames and resolves conflicts
-- **doi_lookup.py** - CrossRef lookup
-- **cli.py** - Click and Rich command-line interface

@@ -3,6 +3,8 @@ amends "@com.github.actions/Workflow.pkl"
 import "@com.github.actions/catalog.pkl"
 import "@com.github.actions/Step.pkl"
 
+import "actions/MiseAction.pkl"
+
 // artifacts are named <prefix>-<arch>: arm64, x86_64, universal
 local artifactPrefix = "pdfmeta-macos"
 
@@ -58,24 +60,28 @@ jobs {
           `fetch-depth` = 1
         }
       }
+      // only the tasks are needed; Swift comes with the runner's Xcode
+      (MiseAction) {
+        with {
+          install = false
+        }
+      }
       (Step) {
         name = "Show toolchain"
         run = "swift --version"
       }
       (Step) {
         name = "Test"
-        // the suite takes about a second; a hard limit stops a runaway test
-        // from eating the runner's disk with swap, as once happened locally
+        // the task kills the suite itself after 60 seconds; this covers the build before it
         `timeout-minutes` = 10
-        run = "swift test"
+        run = "mise run test"
       }
       (Step) {
         name = "Build"
         run =
           """
-          args="-c release --arch ${{ matrix.arch }}"
-          swift build $args
-          bin="$(swift build $args --show-bin-path)/pdfmeta"
+          mise run build --arch ${{ matrix.arch }}
+          bin="$(swift build -c release --arch ${{ matrix.arch }} --show-bin-path)/pdfmeta"
           lipo -info "$bin"
           "$bin" --help
           mkdir -p dist
