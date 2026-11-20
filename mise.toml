@@ -1,9 +1,4 @@
-[tools]
-pkl = "latest"
-
 [settings]
-# configure `mise install` to always keep the downloaded archive
-always_keep_download = false # deleted after install by default
 always_keep_install = false  # deleted on failure by default
 
 verbose = false       # set to true to see full installation output, see `MISE_VERBOSE`
@@ -36,4 +31,6 @@ run = "swift run -c release --quiet pdfmeta"
 
 [tasks."pkl:gen"]
 description = "Generate GitHub Actions YAML from pkl sources"
+# scoped to this task: pkl has no macOS Intel build, and the other tasks run on Intel runners
+tools = { pkl = "latest" }
 run = "pkl eval -m .github/ --project-dir .github/pkl .github/pkl/index.pkl"
