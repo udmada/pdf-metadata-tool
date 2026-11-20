@@ -92,9 +92,16 @@ public struct MetadataResolver: Sendable {
         }
 
         let kept = KeywordParser.tidy(existing.keywords.filter { !Boilerplate.isPublisherKeyword($0) })
-        if kept.isEmpty || Boilerplate.keywordsLookCorrupted(kept) {
-            let parsed = snapshot.pageTexts.lazy.map(KeywordParser.keywords(in:)).first { !$0.isEmpty }
-            resolved.keywords = parsed ?? kept
+        let printed = snapshot.pageTexts.lazy.map(KeywordParser.keywords(in:)).first { !$0.isEmpty } ?? []
+        // Stored keywords are replaced when empty, visibly corrupted, or run together
+        // ("youngpeople") versions of what the paper prints ("Young people").
+        // Only a space between two letters counts, so "LGBTQI+" is not a run-together "LGBTQI +".
+        let printedRunTogether = Set(printed.filter { $0.contains(#/\p{L} \p{L}/#) }.map {
+            $0.replacing(#/(\p{L}) (?=\p{L})/#) { String($0.1) }.lowercased()
+        })
+        let keptHasRunTogether = kept.contains { !$0.contains(" ") && printedRunTogether.contains($0.lowercased()) }
+        if !printed.isEmpty, kept.isEmpty || Boilerplate.keywordsLookCorrupted(kept) || keptHasRunTogether {
+            resolved.keywords = printed
         } else {
             resolved.keywords = kept
         }

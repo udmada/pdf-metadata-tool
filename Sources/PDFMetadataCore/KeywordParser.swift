@@ -3,6 +3,8 @@ import Foundation
 public enum KeywordParser {
     /// Extracts keywords from a paper's explicit "Keywords" section; never guesses without one.
     public static func keywords(in pageText: String) -> [String] {
+        let vocabulary = HTMLText.vocabulary(of: pageText)
+        let pageText = HTMLText.rejoiningLigatures(pageText, vocabulary: vocabulary)
         let lines = pageText.split(separator: "\n", omittingEmptySubsequences: false)
             .map { $0.trimmingCharacters(in: .whitespaces) }
 
@@ -33,10 +35,21 @@ public enum KeywordParser {
                 let continuesPhrase = candidate.first?.isLowercase == true && candidate.count < 80
                 let sameStyle = candidate.count < 80 && separators(in: text) != nil && separators(in: text) == separators(in: candidate)
                 guard listIsOpen || continuesPhrase || sameStyle else { break }
-                text += " " + candidate
+                // A break after a hyphen ("non-" / "heterosexual") or before a symbol that ends an
+                // acronym ("LGBTQI" / "+") is inside a keyword, not between words.
+                let gluesOn = text.hasSuffix("-") || candidate.first.map { "+þ".contains($0) } == true
+                // A word hyphenated only to break the line ("sub-" / "stance") loses the hyphen
+                // when the page spells it whole elsewhere, plural included; compounds ("non-heterosexual") keep it.
+                let brokenStem = String(text.dropLast().reversed().prefix(while: \.isLetter).reversed())
+                let rest = String(candidate.prefix(while: \.isLetter))
+                if text.hasSuffix("-"), !brokenStem.isEmpty, !rest.isEmpty, ["", "s", "es"].contains(where: { vocabulary.contains((brokenStem + rest).lowercased() + $0) }) {
+                    text.removeLast()
+                }
+                text += (gluesOn ? "" : " ") + candidate
                 next += 1
             }
-            return tidy(split(text))
+            // Some publisher fonts map "+" to the glyph for "þ"; after a capital it can only be a plus ("LGBTQþ").
+            return tidy(split(text.replacing(#/(\p{Lu})\s*þ(?!\p{L})/#) { "\($0.1)+" }))
         }
         return []
     }

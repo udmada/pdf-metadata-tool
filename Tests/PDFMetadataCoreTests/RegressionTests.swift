@@ -240,3 +240,69 @@ struct MapLookup: DOILookup {
         #expect(plan.changes == [FieldChange(field: "Title", old: "An In-Depth Analysis", new: "Hatescape: An In-Depth Analysis")])
     }
 }
+
+@Suite struct LigatureTests {
+    // PDFKit turns some fonts' "fi"/"fl" ligature glyphs into a space; the same word spelled
+    // out elsewhere on the page shows how to rejoin it.
+    let page = """
+    Key words: homosexual, human immunode ciency virus, harm re ection, needle exchange.
+    Introduction
+    Gay and bisexual men are at risk of human immunodeficiency virus (HIV) and self-reflection matters.
+    """
+
+    @Test func rejoinsWordsSplitByALostLigature() {
+        #expect(KeywordParser.keywords(in: page) == ["homosexual", "human immunodeficiency virus", "harm reflection", "needle exchange"])
+    }
+
+    @Test func leavesWordsAloneWhenThePageNeverSpellsThemOut() {
+        #expect(KeywordParser.keywords(in: "Keywords: immunode ciency, needle exchange\nIntroduction") == ["immunode ciency", "needle exchange"])
+    }
+
+    @Test func doesNotJoinOrdinaryNeighbouringWords() {
+        #expect(HTMLText.rejoiningLigatures("high field strength", vocabulary: ["highfield", "field"]) == "high field strength")
+    }
+}
+
+@Suite struct GluedKeywordTests {
+    @Test func storedKeywordsRunTogetherAreReplacedByThePrintedOnes() async {
+        let snapshot = PDFSnapshot(
+            existing: ExistingMetadata(title: "Sexual health practices of 16 to 19 year olds in New Zealand", keywords: ["youngpeople", "sexualbehaviour", "stiprevention"]),
+            pageTexts: ["KEYWORDS: Young people; sexual behaviour; STI prevention; New Zealand\n64"])
+        let resolved = await MetadataResolver(lookup: nil).resolve(snapshot)
+        #expect(resolved.keywords == ["Young people", "sexual behaviour", "STI prevention", "New Zealand"])
+    }
+
+    @Test func storedKeywordsThatAreFineAreKept() async {
+        let snapshot = PDFSnapshot(
+            existing: ExistingMetadata(title: "A paper about sleep and energy", keywords: ["sleep", "obesity"]),
+            pageTexts: ["Keywords: sleep; energy intake\nIntroduction"])
+        let resolved = await MetadataResolver(lookup: nil).resolve(snapshot)
+        #expect(resolved.keywords == ["sleep", "obesity"])
+    }
+
+    @Test func thornAfterAnAcronymIsAPlusSign() {
+        // Some publisher fonts map "+" to the glyph for "þ".
+        #expect(KeywordParser.keywords(in: "KEYWORDS: LGBTQþ communities; older adults\nIntroduction") == ["LGBTQ+ communities", "older adults"])
+        #expect(KeywordParser.keywords(in: "Keywords: þorrablót; Iceland\nIntroduction") == ["þorrablót", "Iceland"])
+    }
+}
+
+@Suite struct WrappedKeywordTests {
+    let page = "KEYWORDS\nGay community; non-\nheterosexual males; LGBTQI\nþ; Eastern Europe; anti-\ngender mobilizations\nIntroduction"
+
+    @Test func joinsHyphenatedAndAcronymLineBreaksWithoutASpace() {
+        #expect(KeywordParser.keywords(in: page) == ["Gay community", "non-heterosexual males", "LGBTQI+", "Eastern Europe", "anti-gender mobilizations"])
+    }
+
+    @Test func dropsTheHyphenOfAWordBrokenAcrossLinesWhenThePageSpellsItWhole() {
+        let page = "Keywords: genetic factors; sub-\nstance disorder; non-\nheterosexual males\nIntroduction\nSubstances used by non-heterosexual men."
+        #expect(KeywordParser.keywords(in: page) == ["genetic factors", "substance disorder", "non-heterosexual males"])
+    }
+
+    @Test func goodStoredKeywordsAreNotMistakenForRunTogetherOnes() async {
+        let stored = ["Gay community", "non-heterosexual males", "LGBTQI+", "Eastern Europe", "anti-gender mobilizations"]
+        let snapshot = PDFSnapshot(existing: ExistingMetadata(title: "A Community Sounds Like Communism", keywords: stored),
+                                   pageTexts: ["Keywords: e- health; LGBTQI +; Gay community\nIntroduction"])
+        #expect(await MetadataResolver(lookup: nil).resolve(snapshot).keywords == stored)
+    }
+}
