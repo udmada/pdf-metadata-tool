@@ -1,0 +1,62 @@
+# Generated from Workflow.pkl. DO NOT EDIT.
+name: Release pdfmeta
+'on':
+  push:
+    tags:
+    - v*
+permissions:
+  contents: read
+jobs:
+  find-build:
+    name: Find the build of this commit
+    permissions:
+      actions: read
+    runs-on: ubuntu-latest
+    outputs:
+      run-id: ${{ steps.find.outputs.run-id }}
+    steps:
+    - name: Find a successful or still-running build.yml run for the tagged commit
+      id: find
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |-
+        id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow build.yml --commit "$GITHUB_SHA" \
+          --event push --json databaseId,status,conclusion \
+          --jq 'map(select(.conclusion == "success" or .status != "completed")) | .[0].databaseId // empty')
+        # a build still in progress is waited for rather than duplicated
+        if [ -n "$id" ] && ! gh run watch "$id" --repo "$GITHUB_REPOSITORY" --exit-status --interval 30 > /dev/null; then
+          echo "build run $id did not succeed; building again"
+          id=""
+        fi
+        echo "run-id=$id" >> "$GITHUB_OUTPUT"
+        echo "reusing build run: ${id:-none, will build}"
+  build:
+    name: Build (no existing build of this commit)
+    if: needs.find-build.outputs.run-id == ''
+    needs: find-build
+    uses: ./.github/workflows/build.yml
+  publish:
+    name: Publish release
+    if: always() && needs.find-build.result == 'success' && (needs.build.result == 'success' || needs.build.result == 'skipped')
+    needs:
+    - find-build
+    - build
+    permissions:
+      actions: read
+      contents: write
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+      with:
+        path: dist
+        pattern: pdfmeta-macos-*
+        merge-multiple: true
+        github-token: ${{ github.token }}
+        run-id: ${{ needs.find-build.outputs.run-id || github.run_id }}
+    - name: Publish
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |-
+        ls -l dist
+        gh release create "$GITHUB_REF_NAME" dist/*.tar.gz \
+          --repo "$GITHUB_REPOSITORY" --generate-notes
