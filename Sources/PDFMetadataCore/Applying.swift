@@ -33,7 +33,7 @@ public enum PDFWriter {
     /// so a failure at any point leaves the original as it was.
     @discardableResult
     public static func write(_ metadata: ResolvedMetadata, to url: URL) throws -> XMPOutcome {
-        guard let document = PDFDocument(url: url) else { throw WriteError.unreadable }
+        guard let document = quietly({ PDFDocument(url: url) }) else { throw WriteError.unreadable }
         // PDFKit would silently drop the encryption on save.
         guard !document.isEncrypted else { throw WriteError.encrypted }
 
