@@ -46,3 +46,33 @@ public enum HTMLText {
             .collapsingWhitespace
     }
 }
+
+extension HTMLText {
+    private static let ligatures = ["ffi", "ffl", "fi", "fl", "ff"]
+
+    /// Rejoins words that PDFKit split where a font's "fi" or "fl" ligature glyph came out as a space
+    /// ("immunode ciency"). A pair is joined only when the whole word appears in `vocabulary`,
+    /// typically the lowercased words of the same page, where the body text usually spells it out.
+    public static func rejoiningLigatures(_ text: String, vocabulary: Set<String>) -> String {
+        var tokens = text.split(separator: " ", omittingEmptySubsequences: false).map(String.init)
+        var index = 0
+        while index + 1 < tokens.count {
+            let (left, right) = (tokens[index], tokens[index + 1])
+            let leftCore = String(left.reversed().prefix(while: \.isLetter).reversed()).lowercased()
+            let rightCore = String(right.prefix(while: \.isLetter)).lowercased()
+            if !leftCore.isEmpty, !rightCore.isEmpty,
+               let ligature = ligatures.first(where: { vocabulary.contains(leftCore + $0 + rightCore) }) {
+                tokens[index] = left + ligature + right
+                tokens.remove(at: index + 1)
+            } else {
+                index += 1
+            }
+        }
+        return tokens.joined(separator: " ")
+    }
+
+    /// The lowercased words of `text`, for [rejoiningLigatures(_:vocabulary:)].
+    public static func vocabulary(of text: String) -> Set<String> {
+        Set(text.lowercased().split(whereSeparator: { !$0.isLetter }).map(String.init))
+    }
+}
