@@ -95,11 +95,15 @@ Answers are cached in `~/Library/Caches/pdfmeta/crossref`, so a preview and the 
 
 ## Prebuilt binary
 
-Every push builds and tests the tool natively on Apple silicon (`macos-26`) and Intel (`macos-15-intel`) runners, then joins the two into a universal binary. Each run has three artifacts: `pdfmeta-macos-arm64`, `pdfmeta-macos-x86_64` and `pdfmeta-macos-universal`. Tags named `v*` also publish all three as a release:
+Releases are on the [releases page](https://github.com/udmada/pdf-metadata-tool/releases): `pdfmeta-macos-arm64`, `pdfmeta-macos-x86_64` and `pdfmeta-macos-universal`.
+
+Every push to a branch builds and tests the tool natively on Apple silicon (`macos-26`) and Intel (`macos-15-intel`) runners, then joins the two into a universal binary; each run keeps the three tarballs as artifacts. To release, tag a commit that has been pushed and built:
 
 ```sh
-git tag v0.1.0 && git push origin v0.1.0
+git tag v0.2.0 && git push origin v0.2.0
 ```
+
+The release publishes the artifacts of that commit's existing build, waiting for it if it is still running, so nothing is compiled twice. Only when the commit has no successful build does the release build it first.
 
 The workflows are written in [Pkl](https://pkl-lang.org) under `.github/pkl/`. After changing them, regenerate the YAML with `mise run pkl:gen` and commit both.
 

@@ -1,0 +1,108 @@
+amends "@com.github.actions/Workflow.pkl"
+
+import "@com.github.actions/catalog.pkl"
+import "@com.github.actions/Step.pkl"
+
+name = "Release pdfmeta"
+
+// A tag points at a commit that build.yml has normally already built on its branch push,
+// so the release publishes that run's artifacts instead of compiling the same code again.
+on {
+  push {
+    tags {
+      "v*"
+    }
+  }
+}
+
+permissions {
+  contents = "read"
+}
+
+jobs {
+  ["find-build"] {
+    name = "Find the build of this commit"
+    `runs-on` = "ubuntu-latest"
+    permissions {
+      actions = "read"
+    }
+    outputs {
+      ["run-id"] = "${{ steps.find.outputs.run-id }}"
+    }
+    steps {
+      (Step) {
+        name = "Find a successful or still-running build.yml run for the tagged commit"
+        id = "find"
+        env {
+          ["GH_TOKEN"] = "${{ github.token }}"
+        }
+        run =
+          #"""
+          id=$(gh run list --repo "$GITHUB_REPOSITORY" --workflow build.yml --commit "$GITHUB_SHA" \
+            --event push --json databaseId,status,conclusion \
+            --jq 'map(select(.conclusion == "success" or .status != "completed")) | .[0].databaseId // empty')
+          # a build still in progress is waited for rather than duplicated
+          if [ -n "$id" ] && ! gh run watch "$id" --repo "$GITHUB_REPOSITORY" --exit-status --interval 30 > /dev/null; then
+            echo "build run $id did not succeed; building again"
+            id=""
+          fi
+          echo "run-id=$id" >> "$GITHUB_OUTPUT"
+          echo "reusing build run: ${id:-none, will build}"
+          """#
+      }
+    }
+  }
+  ["build"] {
+    name = "Build (no existing build of this commit)"
+    needs = "find-build"
+    `if` = "needs.find-build.outputs.run-id == ''"
+    uses = "./.github/workflows/build.yml"
+  }
+  ["publish"] {
+    name = "Publish release"
+    needs = new Listing { "find-build" "build" }
+    // runs after whichever source of artifacts applied: the found run, or the build above
+    `if` = "always() && needs.find-build.result == 'success' && (needs.build.result == 'success' || needs.build.result == 'skipped')"
+    `runs-on` = "ubuntu-latest"
+    permissions {
+      contents = "write"
+      actions = "read"
+    }
+    steps {
+      (catalog.`actions/download-artifact@v8`) {
+        with {
+          pattern = "pdfmeta-macos-*"
+          path = "dist"
+          `merge-multiple` = true
+          // the found build run, or this run when it had to build
+          `run-id` = "${{ needs.find-build.outputs.run-id || github.run_id }}"
+          `github-token` = "${{ github.token }}"
+        }
+      }
+      (Step) {
+        name = "Publish"
+        env {
+          ["GH_TOKEN"] = "${{ github.token }}"
+        }
+        run =
+          """
+          ls -l dist
+          gh release create "$GITHUB_REF_NAME" dist/*.tar.gz \\
+            --repo "$GITHUB_REPOSITORY" --generate-notes
+          """
+      }
+    }
+  }
+}
+
+// A job that calls a reusable workflow may not have `steps`, but the schema always renders
+// an empty list; drop it from such jobs.
+output {
+  renderer {
+    converters {
+      ["jobs[*]"] = (job) ->
+        if (job.uses != null) job.toMap().remove("steps").filter((_, value) -> value != null)
+        else job
+    }
+  }
+}

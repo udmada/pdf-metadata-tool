@@ -12,12 +12,12 @@ name = "Build pdfmeta"
 
 on {
   workflow_dispatch {}
+  // release.yml calls this only when no build of the tagged commit exists
+  workflow_call {}
+  // branches only: a tag reuses the artifacts of its commit's build (see release.yml)
   push {
     branches {
       "**"
-    }
-    tags {
-      "v*"
     }
   }
 }
@@ -133,35 +133,6 @@ jobs {
           }
           `if-no-files-found` = "error"
         }
-      }
-    }
-  }
-  ["release"] {
-    name = "Create release"
-    `if` = "startsWith(github.ref, 'refs/tags/v')"
-    needs = "universal"
-    `runs-on` = "ubuntu-slim"
-    permissions {
-      contents = "write"
-    }
-    steps {
-      (catalog.`actions/download-artifact@v8`) {
-        with {
-          pattern = "\(artifactPrefix)-*"
-          path = "dist"
-          `merge-multiple` = true
-        }
-      }
-      (Step) {
-        name = "Publish"
-        env {
-          ["GH_TOKEN"] = "${{ github.token }}"
-        }
-        run =
-          """
-          gh release create "$GITHUB_REF_NAME" dist/*.tar.gz \\
-            --repo "$GITHUB_REPOSITORY" --generate-notes
-          """
       }
     }
   }
