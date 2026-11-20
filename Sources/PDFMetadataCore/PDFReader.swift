@@ -15,7 +15,8 @@ public enum PDFReader {
     }
 
     public static func snapshot(of url: URL, pageLimit: Int = 3) throws -> PDFSnapshot {
-        guard let document = PDFDocument(url: url) else { throw ReadError.unreadable }
+        // CoreGraphics notes recoverable damage in many real PDFs on stderr; it is not ours to report.
+        guard let document = quietly({ PDFDocument(url: url) }) else { throw ReadError.unreadable }
         guard !document.isLocked else { throw ReadError.locked }
 
         let attributes = document.documentAttributes ?? [:]
@@ -35,7 +36,7 @@ public enum PDFReader {
                 subject: text(.subjectAttribute),
                 keywords: keywords.flatMap(KeywordParser.split)
             ),
-            pageTexts: pages.map { $0.string ?? "" },
+            pageTexts: pages.map { page in quietly { page.string ?? "" } },
             firstPageRuns: pages.first.map(runs(on:)) ?? []
         )
     }
@@ -59,8 +60,8 @@ public enum PDFReader {
 
 private let stderrLock = NSLock()
 
-/// Runs `body` with stderr discarded: PDFKit logs debug chatter there for every page it lays out.
-private func quietly<T>(_ body: () -> T) -> T {
+/// Runs `body` with stderr discarded: PDFKit and CoreGraphics log chatter there that is not the user's concern.
+func quietly<T>(_ body: () -> T) -> T {
     stderrLock.withLock {
         fflush(stderr)
         let saved = dup(STDERR_FILENO)

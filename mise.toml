@@ -27,6 +27,8 @@ perl -e '$pid = fork; if (!$pid) { setpgrp(0, 0); exec @ARGV } $SIG{ALRM} = sub 
 
 [tasks.pdfmeta]
 description = "Build if needed and run pdfmeta, e.g. mise run pdfmeta process-all ~/Papers --dry-run"
+# raw hands the task the real terminal; otherwise mise pipes stdout and pdfmeta turns colour off
+raw = true
 run = "swift run -c release --quiet pdfmeta"
 
 [tasks."pkl:gen"]
